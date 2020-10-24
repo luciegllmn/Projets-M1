@@ -1,0 +1,683 @@
+---
+title: 'Projet final : Statistiques pour la génétique'
+author: "Lucie Guillaumin"
+date: "16 avril 2020"
+output: 
+  html_document: 
+    df_print: kable
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Chargement des packages 
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(ggmosaic)
+library(genetics)
+library(LDheatmap)
+library(qqman)
+```
+Dans le projet nous utiliserons le package `tidyverse` afin d'afficher nos graphiques de façon plus harmonieuse.  
+
+#1ère partie : Calculs sur pedigree 
+##Exercice 1
+On se pose le problème d’identifier le modèle sous-jacent à une maladie donnée par analyse de ségrégation. Pour cela on considère le pedigree de la figure en bas dans lequel les individus en gris sont atteints par la maladie. On note **$G_i$** le génotype de l’individu i et **$P_i$** son phénotype (1 pour malade et 0 pour sain).  
+  
+On fait l’hypothèse que la maladie est une maladie génétique due à mutation dans un seul locus d’allèles **S**,**s**. On suppose que la fréquence de l’allèle de susceptibilité **S** est **q** et que il y a équilibre de Hardy-Weinberg.  
+  
+On commence par considérer un modèle de maladie dominant à pénétrance complète.  
+
+###Question 1
+Ecrire les fonctions de pénétrances $\mathbb{P}(P=1|G=g)$ pour tous les trois génotypes possibles.  
+  
+Nous avons 3 types de génotypes possibles : $SS, Ss, ss$, on a donc trois fonctions de pénétrances qui sont les suivantes :  
+
+$f_{SS} = \mathbb{P}(P=1|G_1=SS) = 1$ car l'individu sera malade vu qu'il possède l'allèle de susceptibilité $S$.  
+$f_{Ss} = \mathbb{P}(P=1|G_1=Ss) = 1$  
+$f_{ss} = \mathbb{P}(P=1|G_1=ss) = 0$  car l'individu ne sera pas malade
+  
+  
+###Question 2 
+Trouver les génotypes possibles pour chaque individu.
+
+On rappelle que $S$ est l'allèle de susceptibilité, c'est donc l'allèle associé à la maladie. De plus, nous somme dans le cas de maladie dominant à pénétrance complète.  
+D'après le pedigree, nous avons une famille avec les individus 1 et 2 qui sont les parents et l'individu 3 qui est leur enfant. Les individus 2 et 3 sont malades tandis que l'individu 1 ne l'est pas.  
+Grâce à ces informations :  
+
+- Individu 1 : Il n'est pas atteint par la maladie, il ne peut donc pas posséder l'allèle $S$. Il ne peut donc avoir que le génotype $ss$.  
+  
+- Individu 2 : Il est atteint par la maladie, il possède forcément au moins un allèle $S$. Il peut donc avoir deux génotype $Ss$ ou $SS$.  
+  
+- Individu 3 : Il est atteint par la maladie, il possède forcément au moins un allèle $S$. Or, il est le fruit de la fécondation de l'individu 1 et de l'individu 2. En effet, il récupère de l'individu 1 un allèle $s$ et comme il est malade il récupère forcément un allèle $S$ de l'individu 2. Il ne peut donc avoir qu'un seul génotype qui est $Ss$.
+
+En conclusion, nous avons : 
+$g_1\in${ss}, $g_2\in${SS,Ss} et $g_3\in${Ss}.  
+
+###Question 3 
+Pour tout génotype possible $g_1$ pour l'individu 1, on calcule $\mathbb{P}(G=g)$. Même question pour l'individu 2
+
+On rappelle que la fréquence de $S = q$, donc la fréquence de $s = 1-q$.  
+D'après l'équilibre de HW, on a :  
+
+- Pour l'individu 1 :
+$\mathbb{P}(G_1 = g_1) = \mathbb{P}(G_1 = ss) = (1-q)^2$  
+
+- Pour l'individu 2 : 
+$\mathbb{P}(G_2 = g_2) = \mathbb{P}(G_2\in {Ss, SS}) = \mathbb{P}(G_2 = Ss) + \mathbb{P}(G_2 = SS) = 2q(1-q) + q^2$
+
+###Question 4 
+Pour chaque combinaison de génotypes possibles ($g_1$,$g_2$,$g_3$), on calcule $\mathbb{P}(G_3=g_3|G_1=g_1,G_2=g_2)$.
+
+Les génotypes des individus 1 et 3 sont unique, réciproquement : $ss$ et $Ss$.  
+Il faut donc calculer $\mathbb{P}(G_3=Ss|G_1=ss, G_2=SS(ou)Ss)$. 
+
+- Génotype $G_2 = Ss$ :  
+  
+$\mathbb{P}(G_3=Ss|G_1=ss, G_2=Ss)$ = $\frac{1}{2}$. 
+En effet, la probabilité que l'individu 3 reçoive un allèle $s$ de l'individu 1 vaut $1$ car il ne peut donner qu'un allèle $s$. De plus, la probabilité que l'individu 3 reçoive un allèle $S$ de l'individu 2 vaut $\frac{1}{2}$.     
+En multipliant ces probabilité, on obtient le résultat ci-dessus.  
+       
+- Génotype $G_2 = SS$ :    
+$\mathbb{P}(G_3=Ss|G_1=ss, G_2=SS) = 1$.   
+En effet, de la même manière que précédemment, l'individu 3 reçoit forcément un allèle $s$ de l'individu 1 et cette probabilité vaut $1$ . De plus, l'individu 3 reçoit forcément un allèle $S$ de l'individu 2 et cette probabilité vaut $1$.
+En multipliant ces probabilité, on obtient le résultat ci-dessus.  
+
+###Question 5 
+Ecrire la vraisemblance $\mathbb{P}(P_1=0,P_2=1,P_3=1)$ du trio sous ce modèle de maladie, à l’aide des questions précédentes.
+
+Notons $V$ la vraisemblance du modèle.
+
+$V = \mathbb{P}(P_1=0,P_2=1,P_3=1) = \mathbb{P}(P_1=0)\mathbb{P}(P_2=1|P_1=0)\mathbb{P}(P_3=1|P_1=0,P_2=1)$
+
+Or, d'après les questions précédentes, les individus 1 et 2 sont indépendants vu que ce sont les parents de l'individu 3. 
+
+D'où $V = \mathbb{P}(P_1=0)\mathbb{P}(P_2=1)\mathbb{P}(P_3=1|P_1=0,P_2=1)$
+  
+Or :  
+$\mathbb{P}(P_1=0) = \mathbb{P}(P_1=0|G_1=ss)\mathbb{P}(G_1=ss) = (1-q)^2$
+  
+Cas où $G_2=SS$ :  
+$\mathbb{P}(P_2=1) = \mathbb{P}(P_2=1|G_2=SS)\mathbb{P}(G_2=SS) = \mathbb{P}(G_2=SS) = q^2$  
+$\mathbb{P}(P_3=1|P_1=0,P_2=1) = \mathbb{P}(P_3=1|G_3=Ss)\mathbb{P}(G_3=Ss|G_1=ss,G_2=SS) = 1$  
+    
+Cas où $G_2=Ss$ :    
+$\mathbb{P}(P_2=1) = \mathbb{P}(P_2=1|G_2=Ss)\mathbb{P}(G_2=Ss)=\mathbb{P}(G_2=Ss)=2q(1-q)$  
+$\mathbb{P}(P_3=1|P_1=0,P_2=1) = \mathbb{P}(P_3=1|G_3=Ss)\mathbb{P}(G_3=Ss|G_1=ss,G_2=Ss) = \frac{1}{2}$  
+
+  
+Donc on obtient :   
+$V = (1-q)^2 [1 \times q^2 + \frac{1}{2} \times 2q(1-q)] = (1-q)^2(q^2+q(1-q))$  
+  
+###Question 6 
+Calculer la vraisemblance du trio, si $q = \frac{1}{2}$.
+```{r}
+q = 1/2
+Vrais = (1-q)^2 * (q^2 + q*(1-q))
+Vrais #1/8
+```
+
+####Dans un deuxième temps, on considère un modèle de maladie récessif à pénétrance complète.  
+
+###Question 7 
+Quelle est la vraisemblance du trio ?
+
+Afin de répondre correctement à cette question, nous devons faire les mêmes étapes que précédemment.  
+On se situe maintenant dans un modèle de maladie récessif à pénétrance complète : il faut obligatoirement la présence de deux allèles $S$ pour que la maladie se manifeste.  
+Nous avons donc les fonctions de pénétrances suivantes:   
+$f_{SS} = \mathbb{P}(P=1|G_1=SS)=1$  
+$f_{Ss} = \mathbb{P}(P=1|G_1=Ss)=0$  
+$f_{ss} = \mathbb{P}(P=1|G_1=ss)=0$    
+
+Les génotypes ne sont plus les mêmes que précédemment. En effet, l'individu 1 peut posséder un allèle $S$ car $S$ est considérer comme récessif. De plus, pour que les individus soient malades, il faut qu'ils possèdent deux allèles $S$. Nous avons donc :  
+$g_1\in${Ss,ss}, $g_2\in${SS} et $g_3\in${SS}.  
+  
+Passons maintenant au calcul de la vraisemblance :   
+Notons $V2$ la vraisemblance du modèle récessif et que les individus 1 et 2 sont indépendants. De plus, rappelons que les probabilités d'avoir le génotype $SS, Ss, ss$ sont données par l'équilibre de HW.    
+$V2 = \mathbb{P}(P_1=0,P_2=1,P_3=1) = \mathbb{P}(P_1=0)\mathbb{P}(P_2=1)\mathbb{P}(P_3=1|P_1=0,P_2=1)$  
+
+Or, 
+$\mathbb{P}(P_2=1) = \mathbb{P}(P_2=1|G_2=SS)\mathbb{P}(G_2=SS) = \mathbb{P}(G_2=SS) = q^2$  
+  
+Cas où $G_1=ss$ :    
+$\mathbb{P}(P_1=0) = \mathbb{P}(P_1=0|G_1=ss)\mathbb{P}(G_1=ss) = \mathbb{P}(G_1=ss) = (1-q)^2$  
+$\mathbb{P}(P_3=1|P_1=0,P_2=1) = \mathbb{P}(P_3=1|G_3=SS)\mathbb{P}(G_3=SS|G_1=ss,G_2=SS) = \mathbb{P}(G_3=SS|G_1=ss,G_2=SS) = 0$  
+(L'individu 3 ne va jamais recevoir un allèle $S$ de l'individu 1, vu qu'il a pour génotype $G_1 = ss$).  
+    
+Cas où $G_1=Ss$ :  
+$\mathbb{P}(P_1=0)$ = $\mathbb{P}(P_1=0|G_1=Ss)$$\mathbb{P}(G_1=Ss)$ = $\mathbb{P}(G_1=Ss)$=$2q(1-q)$   
+$\mathbb{P}(P_3=1|P_1=0,P_2=1) = \mathbb{P}(P_3=1|G_3=SS)\mathbb{P}(G_3=SS|G_1=Ss,G_2=SS) = \mathbb{P}(G_3=SS|G_1=Ss,G_2=SS) = \frac{1}{2}$  
+  
+ 
+Donc on obtient : 
+$V2 = q^2 (0 \times (1-q)^2)(\frac{1}{2} \times 2q(1-q)) = q^2(q(1-q)) = q^3(1-q)$
+
+Pour $q = \frac{1}{2}$, on obtient $V2 :$
+```{r}
+q = 1/2
+V2 = q^3*(1-q)
+V2 #1/16
+```
+  
+####Enfin, on suppose que la maladie n’a pas de composante génétique. On note **F** la fréquence de la maladie dans la population.    
+
+###Question 8 
+Ecrire la vraisemblance du trio observé sous cette nouvelle hypothèse.
+
+Afin de répondre correctement à cette question, il faut expliquer notre modèle.  
+Nous sommes dans le cas où la fréquence de tomber malade est de $F$.  
+On peut donc modéliser ce modèle par une loi de Bernoulli(F) : 
+La probabilité d'être malade : $\mathbb{P}(P = 1) = F$ et la probabilité de ne pas être malade $\mathbb{P}(P = 0) = 1-F$.  
+Ici, nous ne parlons pas d'allèles, on peut donc dire que nos individus sont indépendants.  
+  
+On calcule alors la vraisemblance du modèle : 
+$V3 = \mathbb{P}(P_1=0,P_2=1,P_3=1) = \mathbb{P}(P_1=0)\mathbb{P}(P_2=1)\mathbb{P}(P_3=1) = (1-F)\times F\times F = F^2(1-F)$
+
+###Question 9 
+Calculer la vraisemblance du trio, si $F = \frac{1}{20}$
+
+```{r}
+F = 1/20
+V3 = F^2*(1-F)
+V3 #19/8000
+```
+
+###Question 10 
+Le quel des trois modèles de maladie précédents est le plus probable au vu du trio observé?
+ 
+ 
+
+#2ème partie : Etude Human Genetic Diversity Project (HGDP)
+Le projet HGDP de l’Université de Standford a pour but la caractérisation de la diversité génétique dans les populations humaines. Pour cela, les génotypes de 650 000 marqueurs (SNPs) ont été identifiés pour plus de 1000 individus dans de nombreux pays. Nous allons travailler avec les données relative aux SNPs se trouvant dans le gène AKT1.  
+
+##Exercice 2 : Explorations préliminaires - covariables
+###Question 1 : Chargement des données 
+```{r}
+hgdp = read.table('HGDP_AKT1.txt', header = TRUE, sep = '\t', fill = TRUE)
+head(hgdp)
+```
+
+###Question 2 
+Trouver le nombre d’observations (individus) et le nombre de SNPs disponibles (les SNPs dans le gène AKT1 sont dénotés avec le préfixe AKT1).  
+
+```{r}
+print(dim(hgdp))
+
+names(hgdp)
+```
+Notre jeu de données est composée de 1064 observations et 10 variables.  
+De plus, on remarque que nos 4 dernières variables possèdent le préfixe `AKT1` : ce sont nos 4 SNPs.  
+
+
+###Question 3 
+Combien de femmes et d’hommes y a-t-il dans l’étude? Combien de populations? Pour combien de zones géographiques regroupant plusieurs pays a-t-on des données?  
+
+```{r}
+summary(hgdp$Gender)
+
+summary(hgdp$Population)
+length(summary(hgdp$Population))
+
+summary(hgdp$Geographic.area)
+length(summary(hgdp$Geographic.area))
+```
+On peut voir que dans notre étude qu'il y a 380 femmes et 684 hommes.  
+De plus, il y a 52 populations différentes et 14 zones géographique.  
+
+
+###Question 4 
+Quelles sont les populations et les zones géographiques le plus représentées? Et le moins? Représenter graphiquement ces deux variables à l’aide d’un diagramme en bâtons.  
+
+```{r fig.height = 8, fig.width = 15}
+ggplot(hgdp) + 
+  geom_bar(mapping = aes(x = Geographic.area, fill = Population)) + 
+  ggtitle('Diagramme en barres des zones géographiques avec les populations')+
+  xlab('Zone géographique')+
+  coord_flip()
+
+ggplot(hgdp)+
+  geom_bar(mapping = aes(x = Population, fill = Geographic.area)) + 
+  ggtitle('Diagramme en barres des populations avec les zones géographiques')+
+  xlab('Population')+
+  coord_flip()
+```
+
+On peut voir à l'aide de la question 3 et des diagrammes en bâtons ci-dessus que les zones géographiques les plus représentés sont le Pakistan, la Chine et Israël; que les populations les plus représentées sont les Palestiniens, les Bédouins ainsi que les Druzes.  
+De même, on peut voir que les zones géographiques les moins représentées sont le sud de l'Afrique, le sud de l'Asie et le nord de l'Europe; quant aux populations, celles qui sont les moins représentées sont les Sans, les Tuscans et les Xibos.
+
+
+##Exercice 3 : Exploration préliminaires - génotypes
+###Question 1 
+Estimer les fréquences alléliques et génotypiques du SNP `AKT1.C6024T`. Pour cela, on fait l’hypothèse que ces fréquences peuvent être estimées sans prendre en compte le fait que certaines données sont manquantes. Expliquer pourquoi il s’agit d’une hypothèse assez forte en général et la raison pour la quelle elle est justifiée dans ce cas. Vous pouvez utiliser le package `genetics` ou faire directement le calcul des fréquences.  
+  
+Génotypes du SNP `AKT1.C6024T` : 
+```{r}
+summary(hgdp$AKT1.C6024T)
+```
+
+Calcul des fréquences alléliques et génotypiques à l'aide de la fonction `genotype` du package `genetics` :  
+```{r}
+geno = genotype(hgdp$AKT1.C6024T, sep='')
+summary(geno)
+```
+
+###Question 2 
+Afficher les proportions des génotypes de AKT1.C6024T pour chaque zone géographique à l’aide d’un ‘mosaic plot’.
+
+```{r}
+ggplot(hgdp)+
+  geom_mosaic(mapping = aes(x = product(AKT1.C6024T), fill = Geographic.area), na.rm = TRUE)+
+  labs(x = 'Génotype', y = 'Zone géographique' ) + 
+  ggtitle('Mosaic plot')
+
+ggplot(hgdp)+
+  geom_mosaic(mapping = aes(x = product(Geographic.area), fill = AKT1.C6024T), na.rm = TRUE)+
+  labs(x = 'Zone géographique', y = 'Génotype') +
+  ggtitle('Mosaic plot')
+```
+
+
+###Question 3 
+Au vu du mosaic plot, qu’a-t-on envie de conclure concernant l’homogénéité des fréquences genotypiques de AKT1.C6024T? Que faudrait-t-il faire pour vérifier la réponse précédente d’un point de vue statistique?  
+
+Au vu du mosaic plot, on voit que le génotype `CC` est beaucoup plus présent que les deux autres génotypes. On pourrai donc penser que les fréquences génotypiques ne sont pas homogènes.  
+Pour confirmer cette hypothèses, d'un point de vue statistique, nous pouvons faire un test du $\chi^2$ : en effet ce test statistique est possible car nous avons deux variables qualitatives.  
+On souhaite donc tester :   
+
+- $H_0$ : Les génotypes sont homogènes   
+- $H_1$ : Les génotypes ne sont pas homogènes (donc ils sont hétérogènes)  
+  
+```{r}
+chisq.test(table(hgdp$AKT1.C6024T,hgdp$Geographic.area))
+```
+On obtient comme p-value $1,14.10^{-8}$ qui est significativement plus petit que $\alpha = 0.05$ : on rejette donc $H_0$ avec un seuil de confiance à 5% et on décide $H_1$.  
+En conclusion, d'après le test du $\chi^2$, les génotypes sont hétérogènes.  
+
+
+###Question 4 
+En considérant l’ensemble de la population, calculer la mesure D′ de déséquilibre de liaison (LD) pour toute paire de SNPs dans le gène AKT1. Commenter le résultat.   
+  
+On commence par calculer pour chacun de nos SNPs les fréquences alléliques et génotypiques à l'aide de la fonction `genotype`, on construit ensuite un dataframe constitué des résultats précédents.
+```{r}
+geno1 = genotype(hgdp$AKT1.C0756A, sep='')
+geno2 = genotype(hgdp$AKT1.C6024T, sep='')
+geno3 = genotype(hgdp$AKT1.G2347T, sep='')
+geno4 = genotype(hgdp$AKT1.G2375A, sep='')
+
+genoakt = data.frame(geno1,geno2,geno3,geno4)
+```
+
+Ensuite, à l'aide de la fonction `LD`, on récupère la mesure de déséquilibre de liaison D' :  
+```{r}
+LD(genoakt)$"D'"
+```
+On observe que nos déséquilibre de liaison sont proche de 1 ce qui indique un fort déséquilibre de liaison.
+
+```{r fig.width=4, fig.height=4}
+LDheatmap(genoakt, LDmeasure="D'")
+```
+
+#3ème partie : Etude Functional Single Nucleotide Polymorphisms Associated with Human Muscle Size and Strength (FAMuSS)  
+  
+##Exercice 4 : HWE
+###Question 1 : Chargement des données 
+Exclure des données le seul individu d’origine amérindienne (cette observation crée des problèmes quand on essaie automatiser l’analyse sur les strates).
+
+```{r}
+fms = read.table('FMS_data.txt', header = TRUE, sep = '\t', fill = TRUE)
+```
+
+On souhaite enlever l'individu d'origine amérindienne :  
+```{r}
+table(fms$Race)
+
+amind = fms[which(fms$Race =="Am Indian"),]
+head(amind)
+```
+
+On remarque que les informations concernant l'individu d'origine amérindienne sont à la ligne 1107.  
+On décide donc d'enlever la ligne 1107 de notre dataframe :  
+```{r}
+fms = fms[-1107,]
+
+table(fms$Race) #on vérifie qu'on l'a bien enlevé 
+```
+
+###Question 2 
+Tester si le SNP `akt1_t10726c_t12868c` est en HWE dans l’ensemble de la population.
+
+```{r}
+hwe_geno = genotype(fms$akt1_t10726c_t12868c, sep = '')
+
+summary(hwe_geno)
+```
+On teste donc à l'aide du test du $\chi^2$ : 
+
+- $H_0$ : Il y a équilibre de HW  
+- $H_1$ : Il n'y a pas équilibre de HW 
+
+```{r}
+HWE.chisq(hwe_geno)
+```
+On obtient comme p-value $9,99.10^{-5}$ qui est significativement plus petit que $\alpha = 0.05$ : on rejette donc $H_0$ avec un seuil de confiance à 5% et on décide $H_1$.  
+En conclusion, d'après le test du $\chi^2$, il n'y a pas équilibre de HW.
+
+###Question 3 
+Tester si le SNP akt1_t10726c_t12868c est en HWE dans chaque strate de la variable Race. Comment expliquez-vous le résultat du point 2 au vu de ces résultats?
+```{r}
+ggplot(fms)+
+  geom_mosaic(mapping = aes(x = product(akt1_t10726c_t12868c), fill = Race), na.rm = TRUE)+
+  labs(x = 'Génotype', y = 'Origine éthnique' )
+```
+
+On utilise la fonction `genotype` pour afficher les fréquences alléliques et génotypiques pour notre SNP en fonction de chacune de nos origines ethniques : 
+```{r}
+geno_afr = genotype(fms$akt1_t10726c_t12868c[fms$Race == 'African Am'], sep = '')
+geno_as =  genotype(fms$akt1_t10726c_t12868c[fms$Race == 'Asian'], sep = '')
+geno_cau =  genotype(fms$akt1_t10726c_t12868c[fms$Race == 'Caucasian'], sep = '')
+geno_hisp = genotype(fms$akt1_t10726c_t12868c[fms$Race == 'Hispanic'], sep = '')
+geno_oth =  genotype(fms$akt1_t10726c_t12868c[fms$Race == 'Other'], sep = '')
+```
+
+On teste maintenant à l'aide du test du $\chi^2$ pour chaque origine ethnique si il y a équilibre de HW ou non : 
+C'est à dire qu'on teste :   
+
+- $H_0$ : Il y a équilibre de HW  
+- $H_1$ : Il n'y a pas équilibre de HW 
+
+```{r}
+HWE.chisq(geno_afr)
+HWE.chisq(geno_as)
+HWE.chisq(geno_cau)
+HWE.chisq(geno_hisp)
+HWE.chisq(geno_oth)
+```
+
+On remarque que pour chaque test du $\chi^2$ que nous avons effectué, toutes les p-values (0.224,0.1673,1,0.5779,0.6599) sont strictement supérieure à $\alpha = 0.05$ : on décide donc $H_0$ avec seuil de confiance de 5%.  
+En conclusion, pour chaque origine ethnique il y a équilibre de HW.  
+On a donc pas équilibre de HW pour la population globale de notre jeu de données, mais une fois qu'elle est stratifiée (via les origines ethniques) il y a équilibre de HW sur l'ensemble de la population.  
+
+
+##Exercice 5 : Association, tests multiples
+On s’intéresse à la variable `NDRM.CH`, le changement en pourcentage de la force du bras non dominant avant et après le programme d’entraînement physique prévu dans l’étude. On se demande si `NDRM.CH` est associée à un ou plusieurs SNPs.
+
+###Question 1 
+A partir de NDRM.CH construire la variable aléatoire binaire Y qui vaut 1 si NDRM.CH>60 et 0 autrement.
+
+```{r}
+Y = fms$NDRM.CH
+Y[fms$NDRM.CH > 60] = 1
+Y[fms$NDRM.CH <= 60] = 0
+```
+
+###Question 2 
+Tester l’association entre tous les SNPs et Y.  
+On effectue donc un test du $\chi^2$.  
+On teste :  
+
+- $H_0$ : Le snp est indépendant de `NDRM.CH`  
+- $H_1$ : Le snp est lié à `NDRM.CH`     
+
+
+```{r, message = FALSE, warning = FALSE}
+#On commence par enlever les colonnes qui ne sont pas des snps
+data_snp = fms[, -c(1,3, 53, 165, 227:347)]
+snps = names(data_snp)
+
+pval = apply(data_snp, 2, function(x)chisq.test(table(x,Y))$p.value)
+
+#On décide de faire le test à un seuil de 5% : 
+snp_sign = pval[pval< 0.05]
+snp_sign
+```
+On remarque que pour chaque test du $\chi^2$ que nous avons effectué, qu'il y a 24 SNPs dont leurs pvaleurs sont strictement inférieure à $\alpha = 0.05$ : on rejette $H_0$ et on décide donc $H_1$ avec seuil de confiance de 5%.  
+En conclusion, parmi nos 222 SNPs de notre jeu de données, seulement 24 sont associés au changement en pourcentage de la force du bras non dominant avant et après le programme d’entraînement physique prévu dans l’étude.
+
+###Question 3, 4 et 5
+```{r, warning = FALSE}
+datafms= data.frame(SNP = snps, CHR = 1:length(snps), BP = 1:length(snps), P = pval)
+datafms2 = datafms[-c(40,130),] #il faut supprimer les valeurs manquantes 
+manhattan(datafms2, highlight =  names(snp_sign), annotatePval = 0.0001)
+```
+
+Sur le graphique ci-dessous, nous avons utilisé la library `tidyverse` et la fonction `ggplot` pour afficher un Manhattan Plot.  
+On affichera en vert les 24 SNPs qui sont liés à la maladie.  
+
+```{r, warning = FALSE}
+datafms= data.frame(SNP = snps, P = pval)
+df_sign = filter(datafms, P < (0.05/222)) #0.05/222 correspond à la correction de tests multiples
+df_sign2 = filter(datafms, P < 0.05)
+
+ggplot(datafms, aes(x = SNP, y = -log10(P))) +
+  geom_point()+
+  geom_point(data = df_sign2, col = 'green')+
+  geom_hline(aes(yintercept = -log10((0.05/1397)), linetype = 'Correction de Bonferroni'),col = 'red')+
+  geom_hline(aes(yintercept = -log10(0.05/222), linetype = 'Correction tests multiples'), col = 'blue')+
+  scale_linetype_manual(name = 'Légende', values = c(2, 2), 
+         guide = guide_legend(override.aes = list(color = c('red', 'blue'))))+
+  geom_label(data = df_sign, aes(label = SNP), size = 3,vjust = 1.5, hjust = 0.5)+
+  ggtitle('Manhattan Plot')+
+  theme_minimal()
+```
+  
+Après correction pour tests multiples (ligne pointillée bleue), on remarque que le seul SNP qui semble avoir une association significative avec Y est le SNP `rs849409`.  
+On pourrai conclure à une association entre Y et ce SNP, mais afin d'être plus précis il faudrait effectuer une régression linéaire et un calcul de l'OR pour confirmer que le SNP influe sur Y.  
+
+
+#4ème partie : autres données 
+##Exercice 6 : Modélisation, intéraction 
+###Question 1 
+Charger les données. Comme dans l’exercice précédent, tester l’association entre toutes les SNPs et M.  
+
+```{r}
+exo6 = read.table('exo6.txt')
+```
+Dans notre jeu de données, on trouve :   
+
+- M: phénotype, 1 pour les cas et 0 pour les témoins    
+- E: covariable d’exposition environnementale, 1 pour les exposés, 0 pour les non exposés. Exemple: 1 pour les fumeurs et 0 pour les non fumeurs    
+- SNP1 - SNP100: génotype 0,1,2 pour 100 SNP bialléliques. La valeur du génotype indique le nombre d’allèles rares  
+   
+Testons l’allocation entre toutes les SNPs et M, pour cela on effectue donc un test du $\chi^2$.  
+On teste :  
+
+- $H_0$ : Le snp a un lien avec le phénotype   
+- $H_1$ : Le snp n'a aucun lien avec le phénotype    
+  
+```{r, message = FALSE, warning = FALSE}
+data_snp = exo6[,-(1:2)]
+snp = names(data_snp)
+
+pval = apply(data_snp, 2, function(x)chisq.test(table(x,exo6$M))$p.value)
+
+#On décide de faire le test à un seuil de 0.05% : 
+snp_sign = pval[pval < 0.05]
+snp_sign
+```
+On remarque que pour chaque test du $\chi^2$ que nous avons effectué, qu'il y a 9 SNPs dont leurs pvaleurs sont strictement inférieure à $\alpha = 0.05$ : on rejette $H_0$ et on décide donc $H_1$ avec seuil de confiance de 5%.  
+En conclusion, parmi nos 100 SNPs de notre jeu de données, seulement 9 sont associés au phénotype : ce sont les SNPS 29, 31, 40, 41, 42, 56, 59, 71 et 81.
+
+###Question 2 
+Afficher le Manhattan plot avec la barre horizontale correspondante à la correction de Bonferroni. Quels sont les SNPs associé à la maladie?
+
+```{r, warning = FALSE}
+dataexo6 = data.frame(SNP = snp, CHR = 1:length(snp), BP = 1:length(snp), P = pval )
+manhattan(dataexo6, highlight = names(snp_sign), annotatePval = 0.01)
+```
+
+De la même façon qu'à l'exercice 5, nous allons construire le Manhattan Plot avec la fonction `ggplot`.  
+On affichera en vert les SNPs associés à la maladie.  
+
+```{r}
+dataexo6= data.frame(SNP = snp, P = pval)
+df_sign = filter(dataexo6, P < (0.05/1191))
+df_sign2 = filter(dataexo6, P < 0.05)
+
+ggplot(dataexo6, aes(x = SNP, y = -log10(P))) +
+  geom_point()+
+  geom_point(data = df_sign2, col = 'green')+
+  geom_hline(aes(yintercept = -log10((0.05/1191)), linetype = 'Correction de Bonferroni'),col = 'red')+
+  geom_hline(aes(yintercept = -log10(0.05), linetype = 'Correction à 5%'),col = 'blue') +
+  scale_linetype_manual(name = 'Légende', values = c(2, 2), 
+         guide = guide_legend(override.aes = list(color = c('blue', 'red'))))+
+  geom_label(data = df_sign, aes(label = SNP), size = 2.5,vjust = 0, hjust = 1.25)+
+  ggtitle('Manhattan Plot')+
+  theme_minimal()
+```
+  
+A l'aide du Manhattan plot, on se rend compte qu'après correction de Bonferonni, les SNPs associés au phénotype sont les SNPs 40,41 et 42.  
+
+###Question 3 
+On considère le SNP X pour le quel le signal d’association est plus forte (c’est à dire pour le quel le test d’association a donné la plus petite p-valeur). Ecrire l’équation du modèle de régression logistique de M sur X (utiliser le codage additif pour X). Estimer les paramètres du modèle, tester leur significativité et les interpréter en terme de Odds Ratios.
+
+On rappelle que nos 9 SNPs associés à la maladie : 
+```{r}
+names(snp_sign)
+names(which.min(snp_sign))
+```
+On remarque que celui qui a la plus petite pvaleur est le SNP42.
+
+On souhaite maintenant savoir si le SNP42 influe sur M, c'est à dire s'il influe sur le phénotype.  
+M est une variable binaire (elle prend les valeurs 0 ou 1) qui peut être modélisé par une loi de Bernouilli de paramètre $p_i \in [0,1]$.  
+On étudie alors le modèle suivant :  
+$logit(pi) = \beta_0 + \beta_1X_{1,i}$  
+Avec :  
+- $\beta_0$ qui correspond à l'ordonnée à l'origine du modèle  
+- $\beta_1$ qui est associé à la variable explicative  
+- $X_{1,i}$ qui correspond à la variable explicative qui est donc notre SNP pour les i individus   
+
+```{r}
+X = exo6$SNP42
+reglog = glm(M~X, data = exo6, family = binomial(logit))
+summary(reglog)
+```
+D'après les résultats de notre régression logistique :  
+- On peut écrire le modèle sous la forme suivante : $Y = -0.42 + 0.53 X$   
+- On a dans la colonne `estimate`, les estimations de nos coefficients de notre régression logistique  
+- On a dans la colonne `Pr(>|z|)`, les pvaleurs du test de Student où l'on test :  
+$H_0 : "\beta_k = 0"$    
+$H_1 : "\beta_k \ne 0"$    
+Ce test permet de savoir si nos coefficients sont significatifs ou non, c'est à dire si la variable explicative associée joue un rôle dans la détermination du phénotype d'un individu.    
+On voit que nos pvalues sont très faibles : nous allons donc rejeter $H_0$ et ainsi accepter $H_1$.    
+En conclusion, nos coefficients sont significatifs : le SNP42 influe sur la détermination du phénotype d'un individu.    
+  
+Regardons maintenant les odds ratio obtenu avec cette régression : 
+```{r}
+coeff = reglog$coefficients
+exp(coeff)
+```
+On remarque que notre OR entre X et M est supérieur à 1 : X influe bien sur M.
+
+
+###Question 4 
+On suspecte que l’effet de X sur M dépend de l’exposition E. Proposer un modèle pour vérifier cette hypothèse, estimer ses paramètres, et conclure.
+
+Comme à la question précédente nous allons effectuer un modèle logistique, la seule différence avec celui ci-dessus est que nous rajoutons une variable qualitative au modèle afin de comprendre si l'effet de X sur M dépend de l'exposition E.  
+On écrit donc le modèle 2 de la façon suivante :  
+$logit(pi) = \beta_0 + \beta_1X_{1,i} + \beta_2X_{2,i}$   
+Avec :    
+- $\beta_0$ qui correspond à l'ordonnée à l'origine du modèle    
+- $\beta_1$ et $\beta_2$ qui sont associés aux variables explicatives    
+- $X_{1,i}$ et $X_{2,i}$ qui correspondent aux variables explicatives qui sont donc notre SNP et E la covariable d'exposition environnementale pour les i individus   
+
+```{r}
+reglog2 = glm(M~X+E, data = exo6, family = binomial(logit))
+summary(reglog2)
+```
+D'après les résultats de notre régression logistique :  
+- On peut écrire le modèle sous la forme suivante : $Y = -0.43 + 0.55X_1 + 0.46X_2$   
+- On a dans la colonne `estimate`, les estimations de nos coefficients de notre régression logistique  
+- On a dans la colonne `Pr(>|z|)`, les pvaleurs du test de Student où l'on test :  
+$H_0 : "\beta_k = 0"$    
+$H_1 : "\beta_k \ne 0"$    
+Ce test permet de savoir si nos coefficients sont significatifs ou non, c'est à dire si les variables explicatives associées joue un rôle dans la détermination du phénotype d'un individu.    
+On voit que nos pvalues sont très faibles : nous allons donc rejeter $H_0$ et ainsi accepter $H_1$.    
+En conclusion, nos coefficients sont significatifs : le SNP42 ainsi que l'exposition environnementale influent sur la détermination du phénotype d'un individu. 
+  
+Cette conclusion nous amène à penser que E est un facteur de confusion si E et X ne sont pas indépendants.  
+Commençons par faire un teste du $\chi^2$ :  
+On teste :   
+$H_0$ : X est indépendant de E  
+$H_1$ : X est lié à E  
+  
+```{r}
+chisq.test(X, exo6$E)
+```
+On obtient comme p-value 0.3778 qui est significativement plus grande que $\alpha = 0.05$ : on accepte donc $H_0$ avec un seuil de confiance à 5%.  
+En conclusion, X et E sont indépendants.  
+Nous allons maintenant faire une régression logistique et calculer l'OR correspondant pour confirmer nos propos : 
+```{r}
+reglog3 = glm(E~X, data = exo6, family = binomial(logit))
+summary(reglog3)
+coeff3 = reglog3$coefficients
+exp(coeff3)
+```
+On voit que le coefficient lié à la variable explicative X n'est pas significatif. De plus, on remarque que l'OR entre X et E est proche de 1, E n'a donc aucun effet sur X et on peut dire que X et E sont bien indépendants.  
+En conclusion, E la covariable d'exposition environnementale n'influe par sur X, notre SNP42 : E n'est donc pas un facteur de confusion.  
+
+On a montré à la question précédente que X influe sur M, le phénotype de l'individu i.  
+Il reste donc à savoir si M et E sont indépendants ou non, pour cela nous ferons un test du $\chi^2$.  
+On teste :   
+$H_0$ : E est indépendant de M  
+$H_1$ : E est lié à M  
+
+```{r}
+chisq.test(exo6$E,exo6$M)
+```
+On obtient comme p-value 0.004 qui est significativement plus petite que $\alpha = 0.05$ : on rejette $H_0$ et donc on accepte $H_1$ avec un seuil de confiance à 5%.  
+En conclusion, E est lié à M.  
+Nous allons maintenant faire une régression logistique et calculer l'OR correspondant pour confirmer nos propos :   
+```{r}
+reglog4 = glm(M~E, data = exo6, family = binomial(logit))
+summary(reglog4)
+coeff4 = reglog4$coefficients
+exp(coeff4)
+```
+On voit que le coefficient lié à la variable explicative E est significatif. De plus, on remarque que l'OR entre M et E est supérieur à 1 : E a donc un effet sur M et on peut dire que M et E sont bien dépendants.  
+En conclusion, E la covariable d'exposition environnementale influe par M, le phénotype d'un individu i.    
+  
+Pour conclure sur la question de savoir si l'effet de X sur M dépend de l'exposition E :  
+- On peut dire que E n'influe pas X : ils ne sont pas liés  
+- On peut dire que E influe sur M  
+L'effet du SNP42 sur le phénotype d'un individu ne dépend pas de l'exposition de E.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
